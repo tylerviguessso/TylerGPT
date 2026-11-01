@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TÿlerGPT inbox</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #eef0f3;
+    --panel: #ffffff;
+    --text: #14181f;
+    --muted: #667085;
+    --line: #dde1e7;
+    --visitor: #f1f3f6;
+    --me: #2f5bea;
+    --me-text: #ffffff;
+    --accent: #2f5bea;
+    --good: #12a150;
+    --bad: #d92d20;
+    --selected: #e8eeff;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218;
+      --panel: #181c24;
+      --text: #e8ebf1;
+      --muted: #98a1b2;
+      --line: #2a303b;
+      --visitor: #242a35;
+      --me: #4a72f5;
+      --accent: #6c8cff;
+      --good: #3ddc84;
+      --bad: #ff7a70;
+      --selected: #212a44;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-size: 15px; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:disabled { cursor: default; opacity: 0.5; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { display: flex; height: 100dvh; }
+
+  /* Sidebar */
+  .side {
+    width: 320px; flex: none;
+    display: flex; flex-direction: column;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; }
+  .side-head h1 { margin: 0; font-size: 17px; letter-spacing: -0.01em; }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .status.live::before { background: var(--good); }
+  .status.live { color: var(--text); }
+
+  .list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+  .item {
+    display: grid; grid-template-columns: 1fr auto; gap: 2px 10px;
+    width: 100%; padding: 12px 16px;
+    text-align: left; background: none; border: 0; border-top: 1px solid var(--line);
+  }
+  .item:hover { background: var(--visitor); }
+  .item.sel { background: var(--selected); }
+  .item .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .when { font-size: 12px; color: var(--muted); }
+  .item .prev { grid-column: 1; color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge {
+    grid-column: 2; align-self: center; justify-self: end;
+    min-width: 20px; padding: 1px 6px; border-radius: 10px;
+    background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; text-align: center;
+  }
+  .note { margin: 0; padding: 24px 20px; color: var(--muted); line-height: 1.5; }
+
+  /* Conversation */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; padding-top: env(safe-area-inset-top, 0px); }
+  .main-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who span { font-size: 12px; color: var(--muted); }
+  .tool, .back {
+    padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; font-size: 14px;
+  }
+  .tool:hover, .back:hover { background: var(--visitor); }
+  .tool.danger { color: var(--bad); }
+  .back { display: none; }
+
+  .msgs { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .m { max-width: min(560px, 82%); display: flex; flex-direction: column; gap: 3px; }
+  .m .txt { padding: 9px 14px; border-radius: 16px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+  .m .time { font-size: 11px; color: var(--muted); padding: 0 6px; }
+  .m.v { align-self: flex-start; }
+  .m.v .txt { background: var(--visitor); border-bottom-left-radius: 4px; }
+  .m.me { align-self: flex-end; align-items: flex-end; }
+  .m.me .txt { background: var(--me); color: var(--me-text); border-bottom-right-radius: 4px; }
+
+  .reply { padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--panel); border-top: 1px solid var(--line); }
+  .reply-row { display: flex; gap: 10px; align-items: flex-end; }
+  textarea {
+    flex: 1; min-height: 42px; max-height: 180px; padding: 10px 12px;
+    background: var(--bg); color: inherit;
+    border: 1px solid var(--line); border-radius: 12px;
+    font: inherit; font-size: 16px; line-height: 1.4; resize: none;
+  }
+  .send { height: 42px; padding: 0 18px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 600; }
+  .hint { margin: 8px 2px 0; font-size: 12px; color: var(--muted); }
+
+  .placeholder { position: absolute; inset: 0; display: none; place-items: center; color: var(--muted); margin: 0; }
+  .main.none > :not(.placeholder) { display: none; }
+  .main.none .placeholder { display: grid; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 96px; transform: translate(-50%, 8px);
+    max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px;
+    background: var(--text); color: var(--panel); font-size: 14px;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 720px) {
+    .side { width: 100%; border-right: 0; }
+    .main { display: none; }
+    body.open .side { display: none; }
+    body.open .main { display: flex; }
+    .back { display: block; }
+    .m { max-width: 90%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="side">
+    <div class="side-head">
+      <h1>TÿlerGPT inbox</h1>
+      <span id="status" class="status">Connecting</span>
+    </div>
+    <ul id="list" class="list"></ul>
+    <p id="emptyNote" class="note">No chats yet. When someone messages your TÿlerGPT page, they'll appear here.</p>
+  </aside>
+
+  <section id="main" class="main none">
+    <header class="main-head">
+      <button id="back" class="back">Chats</button>
+      <div class="who"><strong id="whoName"></strong><span id="whoId"></span></div>
+      <button id="rename" class="tool">Rename</button>
+      <button id="del" class="tool danger">Delete</button>
+    </header>
+    <div id="msgs" class="msgs"></div>
+    <div class="reply">
+      <div class="reply-row">
+        <textarea id="box" rows="1" placeholder="Reply as TÿlerGPT" aria-label="Reply as TÿlerGPT"></textarea>
+        <button id="send" class="send">Send</button>
+      </div>
+      <p class="hint">Visitors see your reply typed out like an AI. Formatting works: **bold**, `code`, and lines starting with "- ".</p>
+    </div>
+    <p class="placeholder">Select a chat to reply</p>
+  </section>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ---------- Config ---------- */
+  // Must be identical in index.html.
+  const ROOM = "tylergpt-y1b35sdwmyxcg9";
+  const SERVER = "https://ntfy.sh";
+
+  const IN_TOPIC = ROOM + "-in";                 // visitors -> you
+  const outTopic = id => ROOM + "-out-" + id;    // you -> one visitor
+
+  /* ---------- Helpers ---------- */
+  const $ = s => document.querySelector(s);
+  const listEl = $("#list"), msgsEl = $("#msgs"), mainEl = $("#main"), box = $("#box"), sendBtn = $("#send");
+  const touch = matchMedia("(pointer: coarse)").matches;
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+  const byteLen = s => new TextEncoder().encode(s).length;
+  const clock = t => new Date(t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  let toastTimer;
+  function toast(text) {
+    const el = $("#toast");
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 3500);
+  }
+
+  /* ---------- State ---------- */
+  // chats[sid] = { name, unread, last, msgs: [{ id, from: "v" | "me", text, t }] }
+  let chats = store.get("tgadmin:chats", {});
+  let dismissed = store.get("tgadmin:dismissed", {});   // sid -> unix time; older messages are ignored
+  let current = null;
+
+  const save = () => store.set("tgadmin:chats", chats);
+  const label = sid => chats[sid]?.name || "Visitor " + sid;
+
+  /* ---------- Rendering ---------- */
+  function updateTitle() {
+    const n = Object.values(chats).reduce((sum, c) => sum + (c.unread || 0), 0);
+    document.title = (n ? `(${n}) ` : "") + "TÿlerGPT inbox";
+  }
+
+  function renderList() {
+    const ids = Object.keys(chats).sort((a, b) => chats[b].last - chats[a].last);
+    $("#emptyNote").style.display = ids.length ? "none" : "block";
+    listEl.replaceChildren(...ids.map(sid => {
+      const c = chats[sid], last = c.msgs[c.msgs.length - 1];
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.className = "item" + (sid === current ? " sel" : "");
+      const name = document.createElement("span"); name.className = "name"; name.textContent = label(sid);
+      const when = document.createElement("span"); when.className = "when"; when.textContent = last ? clock(last.t) : "";
+      const prev = document.createElement("span"); prev.className = "prev";
+      prev.textContent = last ? (last.from === "me" ? "You: " : "") + last.text.replace(/\s+/g, " ") : "";
+      b.append(name, when, prev);
+      if (c.unread) { const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = c.unread; b.append(badge); }
+      b.addEventListener("click", () => openChat(sid));
+      li.append(b);
+      return li;
+    }));
+  }
+
+  function renderThread() {
+    const c = chats[current];
+    if (!c) return;
+    $("#whoName").textContent = label(current);
+    $("#whoId").textContent = "ID " + current;
+    msgsEl.replaceChildren(...c.msgs.map(m => {
+      const wrap = document.createElement("div"); wrap.className = "m " + m.from;
+      const txt = document.createElement("div"); txt.className = "txt"; txt.textContent = m.text;
+      const time = document.createElement("div"); time.className = "time"; time.textContent = clock(m.t);
+      wrap.append(txt, time);
+      return wrap;
+    }));
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  function openChat(sid) {
+    current = sid;
+    chats[sid].unread = 0;
+    save();
+    mainEl.classList.remove("none");
+    document.body.classList.add("open");
+    renderList(); renderThread(); updateTitle();
+    if (!touch) box.focus();
+  }
+
+  function closeChat() {
+    current = null;
+    mainEl.classList.add("none");
+    document.body.classList.remove("open");
+    renderList();
+  }
+
+  /* ---------- Incoming messages ---------- */
+  function onIncoming(m) {
+    const sid = m.title;                                   // visitors put their ID in the title
+    if (!sid || !/^[a-z0-9]{4,16}$/.test(sid)) return;
+    if (m.time <= (dismissed[sid] || 0)) return;
+
+    const c = chats[sid] ||= { name: "", unread: 0, last: 0, msgs: [] };
+    if (c.msgs.some(x => x.id === m.id)) return;           // already have it (reload replay)
+
+    c.msgs.push({ id: m.id, from: "v", text: m.message || "", t: m.time });
+    c.msgs.sort((a, b) => a.t - b.t);
+    c.last = Math.max(c.last, m.time);
+    if (sid !== current || document.hidden) c.unread = (c.unread || 0) + 1;
+
+    save(); renderList(); updateTitle();
+    if (sid === current) renderThread();
+  }
+
+  const status = $("#status");
+  function connect() {
+    const es = new EventSource(`${SERVER}/${IN_TOPIC}/sse?since=12h`);
+    es.onopen = () => { status.textContent = "Live"; status.classList.add("live"); };
+    es.onerror = () => { status.textContent = "Reconnecting"; status.classList.remove("live"); };
+    es.onmessage = e => {
+      let m;
+      try { m = JSON.parse(e.data); } catch { return; }
+      if (m.event === "message") onIncoming(m);
+    };
+  }
+
+  /* ---------- Replying ---------- */
+  async function sendReply() {
+    const sid = current;
+    const text = box.value.trim();
+    if (!sid || !text) return;
+    if (byteLen(text) > 4000) { toast("That's too long for one message. Split it in two."); return; }
+
+    sendBtn.disabled = true;
+    try {
+      const res = await fetch(`${SERVER}/${outTopic(sid)}`, { method: "POST", body: text });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const t = Math.floor(Date.now() / 1000);
+      chats[sid].msgs.push({ id: "me" + t + Math.random().toString(36).slice(2, 6), from: "me", text, t });
+      chats[sid].last = t;
+      box.value = ""; box.style.height = "auto";
+      save(); renderList();
+      if (sid === current) renderThread();
+    } catch {
+      toast("Couldn't send. Check your connection and try again.");
+    } finally {
+      sendBtn.disabled = false;
+      if (!touch) box.focus();
+    }
+  }
+
+  sendBtn.addEventListener("click", sendReply);
+  box.addEventListener("input", () => {
+    box.style.height = "auto";
+    box.style.height = Math.min(box.scrollHeight, 180) + "px";
+  });
+  box.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !touch) { e.preventDefault(); sendReply(); }
+  });
+
+  /* ---------- Chat tools ---------- */
+  $("#back").addEventListener("click", closeChat);
+
+  $("#rename").addEventListener("click", () => {
+    if (!current) return;
+    const name = prompt("Name for this chat:", chats[current].name || "");
+    if (name === null) return;
+    chats[current].name = name.trim();
+    save(); renderList(); renderThread();
+  });
+
+  $("#del").addEventListener("click", () => {
+    if (!current || !confirm("Delete this chat from your inbox?")) return;
+    dismissed[current] = Math.floor(Date.now() / 1000);
+    store.set("tgadmin:dismissed", dismissed);
+    delete chats[current];
+    save(); closeChat(); updateTitle();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && current && chats[current]?.unread) {
+      chats[current].unread = 0;
+      save(); renderList(); updateTitle();
+    }
+  });
+
+  /* ---------- Start ---------- */
+  renderList(); updateTitle();
+  connect();
+})();
+</script>
+</body>
+</html>
